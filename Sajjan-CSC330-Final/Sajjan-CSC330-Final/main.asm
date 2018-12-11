@@ -3,8 +3,6 @@
 ;
 ; Author : Ravi Sajjan
 ;
-
-//Lines 8-46, code for connecting to OLED
 .cseg
 
 .def reg_SPI_data = r17
@@ -17,7 +15,8 @@
 	
 .org 0x0000
 rjmp start
-.org 0x0100
+.org 0x002A
+	rjmp read_joystick
 
 .macro	set_Pointer
 ldi @0, low(@2<<1)
@@ -56,22 +55,20 @@ clear_heli:
 	ret
 
 read_joystick: ;No movement: 127, Up: >127, Down: <127
-	ldi reg_workhorse, 0b11000111
+	ldi reg_workhorse, 0b11001111
 	sts ADCSRA, reg_workhorse
-	wait_adc: 
-		lds reg_workhorse, ADCSRA
-		andi reg_workhorse, 0b00010000
-		breq wait_adc
-	store:
-		lds reg_workhorse, ADCH
-		nop
-		ret
+	lds reg_workhorse, ADCH
+	reti
 
+;WHEN STARTING THE PROGRAM MOVE THE JOYSTICK IN A RANDOM LOCATION TO SEED THE RANDOM
 start:
 	ldi reg_workhorse, 0b01100010 ;Setup ADC to read in thumbstick, LEFT ADJUST ENABLED
 	sts ADMUX, reg_workhorse
 
-	rcall read_joystick ;Get random seed through input of joystick
+	ldi reg_workhorse, 0b11001111 ;Setup ADC in interupt mode
+	sts ADCSRA, reg_workhorse
+	sei ;Enable interupts
+
 	mov rand_num, reg_workhorse ;Seed the random
 
 	rcall OLED_initialize
@@ -90,26 +87,26 @@ setup_game:
 	rjmp loop
 
 loop:
+	rcall delay_16ms ;~60fps. Don't know how long it actually takes to go through all the instructions below, so it's not a real 60fps
+
 	rcall draw_heli
 	set_Pointer XL, XH, pixel_array
-	rcall OLED_refresh_screen ;Draw to screen every time the game loops. TODO: Make game run on a timer
+	rcall OLED_refresh_screen ;Draw to screen every time the game loops.
 
-	rcall clear_heli
-	cpi heli_location_y, 64
-	breq reset_location_top
-	cpi heli_location_y, 0
-	breq reset_location_bottom
-	cpi heli_location_x, 127
-	breq reset_location_left
+	rcall clear_heli ;Clear the heli so that it can be redrawn according to user input
+	cpi heli_location_y, 64 ;Reached the bottom of the screen
+	breq reset_location_top ;Loop the helicopter to the top
+	cpi heli_location_y, 0 ;Reached the top of the screen
+	breq reset_location_bottom ;Loop the helicopter to the bottom
+	cpi heli_location_x, 127 ;Reached the right end of the screen
+	breq reset_location_left ;Loop to the left end of the screen
 
 	inc heli_location_x ;Move the heli right
-	rcall read_joystick ;Move the heli up/down. Result: reg_workhorse
-	cpi reg_workhorse, 128
+	cpi reg_workhorse, 128 ;Up movement detected
 	brsh move_up
-	cpi reg_workhorse, 127
+	cpi reg_workhorse, 127 ;Down movement detected
 	brlt move_down
 
-	;rcall delay_100ms
 	rjmp loop
 
 move_down:
@@ -120,9 +117,9 @@ move_up:
 	rjmp loop
 
 reset_location_left:
-	rcall GFX_clear_array
+	rcall GFX_clear_array ;Clear out screen
 	ldi heli_location_x, 1
-	drawBlock Char_178, 25
+	drawBlock Char_178, 25 ;Redraw blocks
 	drawBlock Char_178, 50
 	drawBlock Char_178, 80
 	drawBlock Char_178, 110
@@ -133,8 +130,6 @@ reset_location_bottom:
 reset_location_top:
 	ldi heli_location_y, 1
 	rjmp loop
-
-;loop:
 
 lcg_Rand: ;I probably choose shitty 'a' and 'm', but it works...
 	;https://www.eg.bucknell.edu/~xmeng/Course/CS6337/Note/master/node40.html
