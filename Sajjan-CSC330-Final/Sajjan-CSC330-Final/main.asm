@@ -133,7 +133,7 @@ reset_location_top:
 
 lcg_Rand: ;I probably choose shitty 'a' and 'm', but it works...
 	;https://www.eg.bucknell.edu/~xmeng/Course/CS6337/Note/master/node40.html
-	;Linear-Congruential Generator: Xn = (a * (Xn-1) + C) mod m
+	;Linear-Congruential Generator: Xn = (a * (Xn-1)) mod m
 	push r24
 	ldi r24, 3 ; a = 3
 	mul rand_num, r24 ; a * Xn-1 <- result stored in r0 and r1
